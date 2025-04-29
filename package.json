@@ -1,0 +1,32 @@
+{
+  "name": "rag_application",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "tsc -b && node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "@langchain/core": "^0.3.49",
+    "@langchain/google-genai": "^0.2.5",
+    "dotenv": "^16.5.0",
+    "langchain": "^0.3.24",
+    "youtube-transcript": "^1.2.1"
+  },
+  "resolutions": {
+    "@langchain/core": "^0.3.49"
+  },
+  "overrides": {
+    "@langchain/core": "^0.3.49"
+  },
+  "pnpm": {
+    "overrides": {
+      "@langchain/core": "^0.3.49"
+    }
+  }
+}
