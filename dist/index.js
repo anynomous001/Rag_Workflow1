@@ -8,13 +8,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const youtube_transcript_1 = require("youtube-transcript");
 const textsplitters_1 = require("@langchain/textsplitters");
-const dotenv_1 = require("dotenv");
+const dotenv_1 = __importDefault(require("dotenv"));
 const google_genai_1 = require("@langchain/google-genai");
 const generative_ai_1 = require("@google/generative-ai");
-(0, dotenv_1.configDotenv)(); // Load environment variables from .env file
+const qdrant_1 = require("@langchain/qdrant");
+dotenv_1.default.config();
+console.log("Environment Variables: ", process.env.GOOGLE_API_KEY);
+console.log("Environment Variables: ", process.env.QDRANT_URL);
+console.log("Environment Variables: ", process.env.QDRANT_API_KEY);
 function fetchTranscript(videoId) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -34,11 +41,21 @@ function fetchTranscript(videoId) {
             // console.log("Transcript processing completed.");
             const embeddings = new google_genai_1.GoogleGenerativeAIEmbeddings({
                 model: "text-embedding-004", // 768 dimensions
+                apiKey: process.env.GOOGLE_API_KEY,
                 taskType: generative_ai_1.TaskType.RETRIEVAL_DOCUMENT,
                 title: "Document title",
             });
             const embeddingResults = yield embeddings.embedDocuments(texts);
-            console.log("Embedding Results: ", embeddingResults);
+            // console.log("Embedding Results: ", embeddingResults);
+            const vectorStore = yield qdrant_1.QdrantVectorStore.fromExistingCollection(embeddings, {
+                url: process.env.QDRANT_URL,
+                collectionName: "chatbot",
+            });
+            const retriever = vectorStore.asRetriever({ searchType: "similarity", k: 4 });
+            const response1 = yield retriever.invoke('What is deepmind');
+            console.log("Response for 'What is deepmind':", response1);
+            const response2 = yield retriever.invoke('What is the future of AI?');
+            console.log("Response for 'What is the future of AI?':", response2);
         }
         catch (error) {
             console.error("No captions available for this video or another error occurred.", error);

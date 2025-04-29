@@ -1,13 +1,18 @@
 import { YoutubeTranscript } from 'youtube-transcript';
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { configDotenv } from 'dotenv';
+import dotenv from 'dotenv';
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { TaskType } from "@google/generative-ai";
+import { QdrantVectorStore } from "@langchain/qdrant";
 
 
 
+dotenv.config();
 
-configDotenv(); // Load environment variables from .env file
+console.log("Environment Variables: ", process.env.GOOGLE_API_KEY);
+console.log("Environment Variables: ", process.env.QDRANT_URL);
+console.log("Environment Variables: ", process.env.QDRANT_API_KEY);
+
 async function fetchTranscript(videoId: string) {
     try {
         // This fetches the transcript (auto-picks best language if available)
@@ -38,8 +43,22 @@ async function fetchTranscript(videoId: string) {
         });
 
         const embeddingResults = await embeddings.embedDocuments(texts);
-        console.log("Embedding Results: ", embeddingResults);
+        // console.log("Embedding Results: ", embeddingResults);
 
+        const vectorStore = await QdrantVectorStore.fromExistingCollection(embeddings, {
+            url: process.env.QDRANT_URL,
+            collectionName: "chatbot",
+        });
+
+        const retriever = vectorStore.asRetriever(
+            { searchType: "similarity", k: 4 }
+        );
+
+        const response1 = await retriever.invoke('What is deepmind');
+        console.log("Response for 'What is deepmind':", response1);
+
+        const response2 = await retriever.invoke('What is the future of AI?');
+        console.log("Response for 'What is the future of AI?':", response2);
     } catch (error) {
         console.error("No captions available for this video or another error occurred.", error);
     }
