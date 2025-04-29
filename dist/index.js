@@ -18,6 +18,8 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const google_genai_1 = require("@langchain/google-genai");
 const generative_ai_1 = require("@google/generative-ai");
 const qdrant_1 = require("@langchain/qdrant");
+const google_genai_2 = require("@langchain/google-genai");
+const prompts_1 = require("@langchain/core/prompts");
 dotenv_1.default.config();
 console.log("Environment Variables: ", process.env.GOOGLE_API_KEY);
 console.log("Environment Variables: ", process.env.QDRANT_URL);
@@ -31,7 +33,7 @@ function fetchTranscript(videoId) {
             const transcript = transcriptList.map(chunk => chunk.text).join(' ');
             const textSplitter = new textsplitters_1.RecursiveCharacterTextSplitter({
                 chunkSize: 1000,
-                chunkOverlap: 0,
+                chunkOverlap: 150,
             });
             const texts = yield textSplitter.splitText(transcript);
             // console.log("Splitted Texts: ", texts);
@@ -45,24 +47,52 @@ function fetchTranscript(videoId) {
                 taskType: generative_ai_1.TaskType.RETRIEVAL_DOCUMENT,
                 title: "Document title",
             });
-            const embeddingResults = yield embeddings.embedDocuments(texts);
+            // const embeddingResults = await embeddings.embedDocuments(texts);
             // console.log("Embedding Results: ", embeddingResults);
             const vectorStore = yield qdrant_1.QdrantVectorStore.fromExistingCollection(embeddings, {
                 url: process.env.QDRANT_URL,
                 collectionName: "chatbot",
             });
+            const documents = texts.map((text, index) => ({
+                pageContent: text,
+                metadata: {
+                    id: index.toString(), // Use index as a string for the ID
+                    videoId: videoId,
+                    chunkIndex: index,
+                },
+            }));
+            yield vectorStore.addDocuments(documents);
+            console.log("Documents added to Qdrant Vector Store.");
             const retriever = vectorStore.asRetriever({ searchType: "similarity", k: 4 });
-            const response1 = yield retriever.invoke('What is deepmind');
-            console.log("Response for 'What is deepmind':", response1);
-            const response2 = yield retriever.invoke('What is the future of AI?');
-            console.log("Response for 'What is the future of AI?':", response2);
+            const llm = new google_genai_2.ChatGoogleGenerativeAI({
+                model: "gemini-1.5-pro",
+                temperature: 0.2,
+                maxRetries: 2,
+                // other params...
+            });
+            const prompt = prompts_1.ChatPromptTemplate.fromMessages([
+                ["system", `You are a helpful assistant.
+    Answer ONLY from the provided transcript context.
+    If the context is insufficient, just say you don't know.`],
+                prompts_1.HumanMessagePromptTemplate.fromTemplate(`Context: {context}\n\nQuestion: {question}`)
+            ]);
+            const question = "Is the topic of kafka discussed in this video? If yes, what was discussed?";
+            const retrievedDocs = yield retriever.invoke(question);
+            // console.log("Retrieved Documents:", retrievedDocs);
+            const context = retrievedDocs.map(doc => doc.pageContent).join("\n\n");
+            const formattedPrompt = yield prompt.format({
+                context: context,
+                question: question
+            });
+            const llmResponse = yield llm.invoke(formattedPrompt);
+            console.log("Final Answer:", llmResponse.content);
         }
         catch (error) {
             console.error("No captions available for this video or another error occurred.", error);
         }
     });
 }
-const videoId = "Gfr50f6ZBvo";
+const videoId = "06iRM1Ghr1k";
 // Call the function with the video ID  
 fetchTranscript(videoId).then(() => {
     console.log("Transcript processing completed.");
